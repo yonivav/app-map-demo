@@ -55,7 +55,7 @@ class PlantDetailViewModel @Inject constructor(
     val showSnackbar: LiveData<Boolean>
         get() = _showSnackbar
 
-    fun addPlantToGarden() {
+    fun plantInGarden() {
         viewModelScope.launch {
             gardenPlantingRepository.createGardenPlanting(plantId)
             _showSnackbar.value = true
