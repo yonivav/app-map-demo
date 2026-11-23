@@ -51,6 +51,7 @@ jobs:
           fi
 
       - name: Update the map (Claude Code)
+        continue-on-error: true
         if: steps.changes.outputs.behind == 'true' && env.AGENT == 'claude'
         uses: anthropics/claude-code-action@v1
         with:
@@ -59,6 +60,7 @@ jobs:
           prompt: ${{ env.PROMPT }} The map's folder is ${{ env.MAP_DIR }}.
 
       - name: Update the map (OpenAI Codex)
+        continue-on-error: true
         if: steps.changes.outputs.behind == 'true' && env.AGENT == 'codex'
         uses: openai/codex-action@v1
         with:
@@ -67,18 +69,22 @@ jobs:
           prompt: ${{ env.PROMPT }} The map's folder is ${{ env.MAP_DIR }}.
 
       - name: Update the map (Gemini CLI)
+        continue-on-error: true
         if: steps.changes.outputs.behind == 'true' && env.AGENT == 'gemini'
         uses: google-github-actions/run-gemini-cli@v0
         env:
           GEMINI_CLI_TRUST_WORKSPACE: 'true'
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          # A Flash model, so the free tier isn't overloaded; set the GEMINI_MODEL variable to change it.
+          gemini_model: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
           settings: |-
             {"tools": {"core": ["run_shell_command", "read_file", "read_many_files", "write_file", "replace", "glob", "search_file_content", "list_directory"],
                        "allowed": ["run_shell_command", "write_file", "replace"]}}
           prompt: ${{ env.PROMPT }} The map's folder is ${{ env.MAP_DIR }}.
 
       - name: Update the map (Cursor)
+        continue-on-error: true
         if: steps.changes.outputs.behind == 'true' && env.AGENT == 'cursor'
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
@@ -89,6 +95,7 @@ jobs:
           "$agent" -p --force "$PROMPT The map's folder is $MAP_DIR."
 
       - name: Update the map (GitHub Copilot)
+        continue-on-error: true
         if: steps.changes.outputs.behind == 'true' && env.AGENT == 'copilot'
         env:
           COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
@@ -96,11 +103,24 @@ jobs:
           npm install -g @github/copilot
           copilot -p "$PROMPT The map's folder is $MAP_DIR." --allow-all-tools --no-ask-user
 
-      - name: Commit the map
+      # The agent's exit code doesn't decide what's committed: the map's own checks do.
+      - name: Check the updated map
+        id: check
         if: steps.changes.outputs.behind == 'true'
+        run: |
+          app_map=.app-map/skills/app-map/scripts/app-map
+          $app_map build "$MAP_DIR" && $app_map verify "$MAP_DIR" && $app_map changes "$MAP_DIR" --exit-code \
+            && echo "current=true" >> "$GITHUB_OUTPUT"
+      - name: Commit the map
+        if: steps.check.outputs.current == 'true'
         run: |
           git add "$MAP_DIR"
           git diff --cached --quiet && exit 0
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -m "App map: follow the code changes in this PR"
           git push
+      - name: The map is still behind
+        if: steps.changes.outputs.behind == 'true' && steps.check.outputs.current != 'true'
+        run: |
+          echo "::error::The agent didn't bring the map up to date (see its step above). Ask your agent to \"update the app map\", or re-run this job."
+          exit 1
