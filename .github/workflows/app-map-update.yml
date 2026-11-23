@@ -1,0 +1,106 @@
+# Updates the App map on every PR: an AI agent reads what the PR changed in the code, edits
+# only the affected module pages, rebuilds, verifies and commits the map to the PR's branch.
+# The developer writes code; the map follows. Copy to .github/workflows/app-map-update.yml
+# (or run `install.sh --auto`), set MAP_DIR, pick your agent in AGENT and add its key as a
+# repository secret:
+#
+#   AGENT     secret                                   e.g.
+#   claude    ANTHROPIC_API_KEY                        gh secret set ANTHROPIC_API_KEY
+#   codex     OPENAI_API_KEY                           gh secret set OPENAI_API_KEY
+#   gemini    GEMINI_API_KEY                           gh secret set GEMINI_API_KEY
+#   cursor    CURSOR_API_KEY                           gh secret set CURSOR_API_KEY
+#   copilot   COPILOT_GITHUB_TOKEN (a token of a user with Copilot, "Copilot requests" permission)
+#
+# Screenshots aren't retaken here (that needs a simulator): ask your agent locally when a
+# screen looks different.
+name: App map update
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: write
+  pull-requests: write
+env:
+  MAP_DIR: docs/app-map
+  AGENT: gemini
+  APP_MAP_REF: main
+  PROMPT: >-
+    Update the App map in the folder named by $MAP_DIR for this PR's code changes. Follow the
+    "Update" section of .app-map/skills/app-map/SKILL.md, using
+    .app-map/skills/app-map/scripts/app-map for every command: run `changes`, edit only the
+    module .md files it lists and only the lines the code change affects, then `build`,
+    `verify` and `sync`. Don't change any file outside the map's folder.
+jobs:
+  update:
+    # Not for forks (no secrets there), and not for the commit this job pushes itself.
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: '${{ github.head_ref }}', fetch-depth: 0 }
+      - uses: actions/checkout@v4
+        with: { repository: yonivav/app-map, ref: '${{ env.APP_MAP_REF }}', path: .app-map }
+      - uses: dart-lang/setup-dart@v1   # Dart's own parser for Flutter apps; harmless otherwise
+      - uses: browser-actions/setup-chrome@v1
+      - name: Is the map behind the code?
+        id: changes
+        run: |
+          if ! .app-map/skills/app-map/scripts/app-map changes "$MAP_DIR" --exit-code >> "$GITHUB_STEP_SUMMARY"; then
+            echo "behind=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update the map (Claude Code)
+        if: steps.changes.outputs.behind == 'true' && env.AGENT == 'claude'
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: --allowedTools "Bash,Read,Edit,Write,Glob,Grep"
+          prompt: ${{ env.PROMPT }} The map's folder is ${{ env.MAP_DIR }}.
+
+      - name: Update the map (OpenAI Codex)
+        if: steps.changes.outputs.behind == 'true' && env.AGENT == 'codex'
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ':workspace'
+          prompt: ${{ env.PROMPT }} The map's folder is ${{ env.MAP_DIR }}.
+
+      - name: Update the map (Gemini CLI)
+        if: steps.changes.outputs.behind == 'true' && env.AGENT == 'gemini'
+        uses: google-github-actions/run-gemini-cli@v0
+        env:
+          GEMINI_CLI_TRUST_WORKSPACE: 'true'
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          settings: |-
+            {"tools": {"core": ["run_shell_command", "read_file", "read_many_files", "write_file", "replace", "glob", "search_file_content", "list_directory"],
+                       "allowed": ["run_shell_command", "write_file", "replace"]}}
+          prompt: ${{ env.PROMPT }} The map's folder is ${{ env.MAP_DIR }}.
+
+      - name: Update the map (Cursor)
+        if: steps.changes.outputs.behind == 'true' && env.AGENT == 'cursor'
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+        run: |
+          curl https://cursor.com/install -fsS | bash
+          export PATH="$HOME/.cursor/bin:$HOME/.local/bin:$PATH"
+          agent=$(command -v agent || command -v cursor-agent)
+          "$agent" -p --force "$PROMPT The map's folder is $MAP_DIR."
+
+      - name: Update the map (GitHub Copilot)
+        if: steps.changes.outputs.behind == 'true' && env.AGENT == 'copilot'
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+        run: |
+          npm install -g @github/copilot
+          copilot -p "$PROMPT The map's folder is $MAP_DIR." --allow-all-tools --no-ask-user
+
+      - name: Commit the map
+        if: steps.changes.outputs.behind == 'true'
+        run: |
+          git add "$MAP_DIR"
+          git diff --cached --quiet && exit 0
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "App map: follow the code changes in this PR"
+          git push

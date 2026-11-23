@@ -1,0 +1,6 @@
+---
+description: App map of this repo — build, update or read the architecture map (UML per module, clickable code). Use for "app map", "architecture map", "UML of the app", or after code changes to a mapped module.
+alwaysApply: false
+---
+Follow the app-map skill: read `.agents/skills/app-map/SKILL.md` and do what it says. Its only
+command is `.agents/skills/app-map/scripts/app-map` (run it with no arguments for the list).

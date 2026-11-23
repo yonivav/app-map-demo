@@ -1,0 +1,12 @@
+// Used by run_shots.sh --real-app, for this one build only: the app's tests run with
+// appmap.AppMapRunner, a plain AndroidJUnitRunner, so the scenario runs under the app's own
+// Application. The project's build files aren't touched. (The variant API runs after the
+// project's own build script, so it wins over the runner set there.)
+gradle.lifecycle.beforeProject { project ->
+    project.pluginManager.withPlugin('com.android.application') {
+        def components = project.extensions.getByName('androidComponents')
+        components.onVariants(components.selector().all()) { variant ->
+            variant.androidTest?.instrumentationRunner?.set('appmap.AppMapRunner')
+        }
+    }
+}

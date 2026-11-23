@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# app-map's one entry point. Sets up its own Python environment on first use.
+#
+#   app-map build <map>                      Markdown → site pages, code popups, search
+#   app-map verify <map>                     placeholders, Mermaid pitfalls, dead clicks, rendering
+#   app-map changes <map> [--exit-code]      what changed in the code since the map was synced
+#   app-map sync <map>                       mark the map as current with the repo's HEAD
+#   app-map where <map> <Class|file>         where the map draws a class or a file's classes
+#   app-map facts <map> <Class>... | --dir <folder>   what each class builds and uses
+#   app-map convert <map>                    HTML pages (older maps) → Markdown sources
+#   app-map shots <app> <scenario> <out>     run a Flutter screenshot scenario
+#   app-map shots ios --bundle <id> --map <map> [--app <.app>] <Scenario.swift> <out>
+#   app-map shots android <app module> <Scenario.kt> <out> [--variant Debug]
+#   app-map crop <shots dir> <map>           one picture per page/widget, then rebuild
+#   app-map compare <expected> <actual>      structural diff of two maps
+#
+# The repo the map describes: "repo" in <map>/app-map.json (a path relative to the map), else
+# the git root of the map folder. "sourceUrl" there makes popups link to GitHub lines.
+set -euo pipefail
+here="$(cd "$(dirname "$0")" && pwd)"
+venv="$HOME/.cache/app-map/venv"
+if [ ! -x "$venv/bin/python" ] || ! "$venv/bin/python" -c "import tree_sitter_language_pack, yaml, PIL" 2>/dev/null; then
+  echo "app-map: setting up Python environment in $venv (first run only)…" >&2
+  python3 -m venv "$venv"
+  "$venv/bin/pip" install -q --upgrade pip
+  "$venv/bin/pip" install -q -r "$here/requirements.txt"
+fi
+py="$venv/bin/python"
+
+setting() {  # setting <map> <key>: a value from app-map.json, or empty
+  [ -f "$1/app-map.json" ] && "$py" -c "import json,sys; print(json.load(open(sys.argv[1])).get(sys.argv[2]) or '')" "$1/app-map.json" "$2" || true
+}
+repo_of() {
+  local map="$1" repo
+  repo="$(setting "$map" repo)"
+  if [ -n "$repo" ]; then (cd "$map" && cd "$repo" && pwd); return; fi
+  git -C "$map" rev-parse --show-toplevel 2>/dev/null ||
+    { echo "app-map: $map isn't in a git repo — set \"repo\" in $map/app-map.json" >&2; exit 2; }
+}
+pages_of() {
+  for page in "$1"/*.html; do echo "$page"; done
+}
+index() {
+  local map="$1" url
+  url="$(setting "$map" sourceUrl)"
+  local pages=(); while IFS= read -r page; do pages+=("$page"); done < <(pages_of "$map")
+  if [ -n "$url" ]; then "$py" "$here/index_code.py" --source-url "$url" "$(repo_of "$map")" "${pages[@]}"
+  else "$py" "$here/index_code.py" "$(repo_of "$map")" "${pages[@]}"; fi
+}
+
+cmd="${1:-}"; shift || true
+# Folders of the repo the map leaves out ("exclude" in app-map.json), e.g. another platform's
+# target whose classes share names with this one's.
+map_arg="${1:-}"; [ "$cmd" = crop ] && map_arg="${2:-}"
+if [ -n "$map_arg" ] && [ -f "$map_arg/app-map.json" ]; then
+  APP_MAP_EXCLUDE="$("$py" -c "import json,sys; print('\n'.join(json.load(open(sys.argv[1])).get('exclude') or []))" "$map_arg/app-map.json")"
+  export APP_MAP_EXCLUDE
+fi
+case "$cmd" in
+  build)
+    map="${1:?usage: app-map build <map>}"
+    "$py" "$here/build.py" "$map"
+    index "$map" | tail -1 ;;
+  index) index "${1:?usage: app-map index <map>}" ;;
+  verify) "$py" "$here/verify.py" "${1:?usage: app-map verify <map>}" ;;
+  changes|sync)
+    map="${1:?usage: app-map $cmd <map> [--exit-code]}"; shift
+    "$py" "$here/changes.py" "$cmd" "$map" "$(repo_of "$map")" "$@" ;;
+  where)
+    map="${1:?usage: app-map where <map> <Class|file>}"
+    "$py" "$here/changes.py" where "$map" "$(repo_of "$map")" "${2:?Class or file}" ;;
+  facts)
+    map="${1:?usage: app-map facts <map> <Class>... | --dir <folder>}"; shift
+    "$py" "$here/facts.py" "$(repo_of "$map")" "$@" ;;
+  convert) "$py" "$here/html_to_md.py" "${1:?usage: app-map convert <map>}" ;;
+  shots)
+    case "${1:-}" in
+      ios) shift; "$py" "$here/../adapters/ios/run_shots.py" "$@" ;;
+      android) shift; "$here/../adapters/android/run_shots.sh" "$@" ;;
+      flutter) shift; "$here/../adapters/flutter/run_shots.sh" "$@" ;;
+      *) "$here/../adapters/flutter/run_shots.sh" "$@" ;;
+    esac ;;
+  crop)
+    shots="${1:?usage: app-map crop <shots dir> <map>}"; map="${2:?map dir}"
+    rm -rf "$map/shots/code"
+    "$py" "$here/crop_shots.py" "$shots" "$map/shots/code" "$map"
+    index "$map" | tail -1 ;;
+  compare) "$py" "$here/compare_maps.py" "$@" ;;
+  *) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

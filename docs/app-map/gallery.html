@@ -1,0 +1,314 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gallery Module</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: one reading column of diagram plates, each with a short caption and a legend strip. */
+  :root {
+    --bg: #f6f4fb;
+    --surface: #ffffff;
+    --ink: #1c1a29;
+    --muted: #5d5a70;
+    --line: #dcd6ec;
+    --accent: #36169d;
+    --accent-soft: #ede8f6;
+    --upd: #7a4d00;
+    --upd-soft: #ffe2a8;
+    --font-display: "Fraunces", Georgia, serif;
+    --font-body: "IBM Plex Sans", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15131d; --surface: #1d1a28; --ink: #ece9f6; --muted: #a6a1bd;
+      --line: #34304a; --accent: #b9a6ff; --accent-soft: #2a2440;
+      --upd: #ffd88a; --upd-soft: #5a3b06; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15131d; --surface: #1d1a28; --ink: #ece9f6; --muted: #a6a1bd;
+    --line: #34304a; --accent: #b9a6ff; --accent-soft: #2a2440;
+    --upd: #ffd88a; --upd-soft: #5a3b06; color-scheme: dark;
+  }
+  body {
+    background: var(--bg); color: var(--ink); font-family: var(--font-body);
+    font-size: 15px; line-height: 1.5;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 32px 64px;
+  }
+  /* Wide: diagrams use the screen; paragraphs stay at a readable measure (.cap, 70ch). */
+  main { max-width: 1880px; margin: 0 auto; display: grid; gap: 28px; }
+  header .sub, .find input { max-width: 70ch; }
+  header { display: grid; gap: 6px; }
+  h1 { font-family: var(--font-display); font-weight: 600; font-size: clamp(28px, 4vw, 40px); margin: 0; text-wrap: balance; }
+  .sub { color: var(--muted); margin: 0; }
+  .sub code, .cap code { font-family: var(--font-mono); font-size: 0.9em; color: var(--accent); }
+  section { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: grid; gap: 12px; min-width: 0; }
+  h2 { margin: 0; font-size: 18px; font-weight: 600; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  h2 span { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-weight: 400; letter-spacing: 0.04em; text-transform: uppercase; }
+  .cap { margin: 0; color: var(--muted); max-width: 70ch; }
+  .diagram { overflow-x: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px; min-height: 120px; }
+  .diagram .out { display: flex; justify-content: center; width: max-content; min-width: 100%; }
+  .diagram .out svg { max-width: none; height: auto; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--muted); }
+  .legend li { display: flex; gap: 6px; align-items: center; }
+  .legend b { font-family: var(--font-mono); color: var(--ink); font-weight: 500; }
+  .tag { display: inline-block; font-family: var(--font-mono); font-size: 11px; padding: 1px 7px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); border: 1px solid var(--line); }
+  .tag.upd { background: var(--upd-soft); color: var(--upd); border-color: var(--upd); }
+  .updates { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+  .updates code { font-family: var(--font-mono); font-size: 0.9em; color: var(--ink); }
+  .err { color: var(--muted); font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; }
+  .shots { margin: 0; padding: 0 0 6px; list-style: none; display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x proximity; }
+  .shots li { flex: 0 0 180px; scroll-snap-align: start; display: grid; gap: 6px; align-content: start; }
+  .shots img { width: 180px; aspect-ratio: 375 / 812; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); display: block; }
+  .shots figcaption { color: var(--muted); font-size: 13px; }
+  .shots figure { margin: 0; display: grid; gap: 6px; }
+  .sub a { color: var(--accent); }
+</style>
+
+<main>
+  <header>
+    <h1>Gallery Module</h1>
+    <p class="sub"><a href="index.html">← App map</a> · Unsplash photos of the plant, paged and pull-to-refresh.</p>
+  </header>
+  <section aria-labelledby="h-what-it-does">
+    <h2 id="h-what-it-does">What it does</h2>
+    <p class="cap">Opened at <code>gallery/{plantName}</code> from a plant's detail page, only in builds with an Unsplash key. It searches Unsplash for the plant's name and shows the photos in a 2-column grid of cards labelled with the photographer's name, loading 25 per page starting at page 1 and stopping at the response's <code>total_pages</code>. Pulling down reloads the search; the spinner ends when the refresh finishes or fails. Tapping a photo opens the photographer's Unsplash profile in the browser with sunflower referral parameters; the back arrow returns to the plant.</p>
+  </section>
+  <section aria-labelledby="h-classes">
+    <h2 id="h-classes">Logic <span>class diagram</span></h2>
+    <p class="cap">The view-model asks the repository for a paging stream; a paging source turns page keys into Unsplash search calls.</p>
+    <div class="diagram"><div class="out" data-src="src-classes"></div></div>
+    <ul class="legend">
+      <li><b>──▷</b> holds</li>
+      <li><b>◇──</b> list of</li>
+      <li><b>┄┄▷</b> uses</li>
+    </ul>
+  </section>
+  <section aria-labelledby="h-widgets">
+    <h2 id="h-widgets">Screen <span>widget composition</span></h2>
+    <p class="cap">A <code>Scaffold</code> with a back bar and a pull-to-refresh grid of photo cards.</p>
+    <div class="diagram"><div class="out" data-src="src-widgets"></div></div>
+    <ul class="legend">
+      <li><b>◆──</b> contains</li>
+      <li><b>──▷</b> reads model</li>
+    </ul>
+  </section>
+  <section aria-labelledby="h-sequence">
+    <h2 id="h-sequence">Browse a plant's photos <span>sequence</span></h2>
+    <p class="cap">The view-model loads on creation, so the grid fills without any user action.</p>
+    <div class="diagram"><div class="out" data-src="src-sequence"></div></div>
+  </section>
+  <section aria-labelledby="h-files">
+    <h2 id="h-files">Key files</h2>
+    <ul class="updates">
+      <li><code>app/src/main/java/com/google/samples/apps/sunflower/compose/gallery/</code> · gallery grid and top bar</li>
+      <li><code>app/src/main/java/com/google/samples/apps/sunflower/viewmodels/GalleryViewModel.kt</code> · photo stream and refresh</li>
+      <li><code>app/src/main/java/com/google/samples/apps/sunflower/data/UnsplashRepository.kt</code> · pager config</li>
+      <li><code>app/src/main/java/com/google/samples/apps/sunflower/data/UnsplashPagingSource.kt</code> · page keys and loads</li>
+      <li><code>app/src/main/java/com/google/samples/apps/sunflower/api/</code> · Retrofit Unsplash API</li>
+      <li><code>app/src/main/java/com/google/samples/apps/sunflower/data/</code> · Unsplash response models (<code>Unsplash*.kt</code>)</li>
+    </ul>
+  </section>
+</main>
+
+<script type="text/plain" id="src-classes">
+classDiagram
+  direction LR
+  class GalleryScreen { <<page>> }
+  class GalleryViewModel {
+    <<view-model>>
+    plantPictures
+    refreshData()
+  }
+  class UnsplashRepository {
+    <<service>>
+    getSearchResultStream(query)
+  }
+  class UnsplashPagingSource {
+    <<service>>
+    load(params)
+    getRefreshKey(state)
+  }
+  class UnsplashService {
+    <<interface>>
+    searchPhotos(query, page, perPage, clientId)
+    create()
+  }
+  class UnsplashSearchResponse {
+    <<data>>
+    results · totalPages
+  }
+  class UnsplashPhoto {
+    <<data>>
+    id · urls · user
+  }
+  class UnsplashPhotoUrls {
+    <<data>>
+    small
+  }
+  class UnsplashUser {
+    <<data>>
+    name · username
+    attributionUrl
+  }
+  GalleryScreen --> GalleryViewModel : viewModel
+  GalleryViewModel ..> UnsplashRepository : getSearchResultStream()
+  UnsplashRepository ..> UnsplashPagingSource : builds
+  UnsplashPagingSource ..> UnsplashService : searchPhotos()
+  UnsplashService ..> UnsplashSearchResponse : returns
+  UnsplashSearchResponse o-- UnsplashPhoto : results
+  UnsplashPhoto --> UnsplashPhotoUrls : urls
+  UnsplashPhoto --> UnsplashUser : user
+</script>
+
+<script type="text/plain" id="src-widgets">
+classDiagram
+  direction TB
+  class GalleryScreen { <<page>> }
+  class Scaffold { <<screen frame>> }
+  class GalleryTopBar { <<widget>> }
+  class LazyVerticalGrid { <<2 columns>> }
+  class PhotoListItem { <<widget>> }
+  class ImageListItem { <<widget>> }
+  class PullToRefreshContainer { <<refresh spinner>> }
+  class UnsplashPhoto { <<data>> }
+  GalleryScreen *-- Scaffold
+  Scaffold *-- GalleryTopBar
+  Scaffold *-- LazyVerticalGrid
+  Scaffold *-- PullToRefreshContainer
+  LazyVerticalGrid *-- PhotoListItem
+  PhotoListItem *-- ImageListItem
+  PhotoListItem --> UnsplashPhoto
+</script>
+
+<script type="text/plain" id="src-sequence">
+sequenceDiagram
+  actor User
+  participant Gal as GalleryScreen
+  participant VM as GalleryViewModel
+  participant Repo as UnsplashRepository
+  participant Src as UnsplashPagingSource
+  participant Api as UnsplashService
+  User->>Gal: taps the gallery icon on a plant
+  Gal->>VM: plantPictures
+  VM->>VM: refreshData()
+  VM->>Repo: getSearchResultStream(plantName)
+  Repo->>Src: builds with page size 25
+  Src->>Src: load(params)
+  Src->>Api: searchPhotos(query, 1, perPage)
+  Api-->>Src: results and total_pages
+  Src-->>Gal: first page of photos
+  Note over Src: next key stops at total_pages
+  User->>Gal: pulls down
+  Gal->>VM: refreshData()
+  User->>Gal: taps a photo
+  Gal-->>User: opens the photographer's attributionUrl
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<script src="code/gallery.js"></script>
+<script>
+  (function () {
+    const css = () => getComputedStyle(document.documentElement);
+    const token = (name) => css().getPropertyValue(name).trim();
+    let run = 0;
+
+    // Mermaid sometimes puts an arrow's label on top of a box: move each such label up or
+    // down, a label's height at a time, to the nearest spot clear of every box.
+    function freeLabels(svg) {
+      const boxes = Array.from(svg.querySelectorAll('g.node')).map((node) => node.getBoundingClientRect());
+      const hits = (rect) => boxes.some((box) =>
+        rect.left < box.right && rect.right > box.left && rect.top < box.bottom && rect.bottom > box.top);
+      for (const label of svg.querySelectorAll('g.edgeLabel')) {
+        const rect = label.getBoundingClientRect();
+        if (!rect.width || !hits(rect)) continue;
+        const scale = (label.getScreenCTM() || { a: 1 }).a || 1;
+        for (const step of [-1, 1, -2, 2, -3, 3]) {
+          const dy = step * (rect.height + 4);
+          const moved = { left: rect.left, right: rect.right, top: rect.top + dy, bottom: rect.bottom + dy };
+          if (!hits(moved)) {
+            label.setAttribute('transform', (label.getAttribute('transform') || '') + ' translate(0,' + (dy / scale) + ')');
+            break;
+          }
+        }
+      }
+    }
+
+    async function renderAll() {
+      const pass = ++run;
+      const updatedStyle =
+        'fill:' + token('--upd-soft') + ',stroke:' + token('--upd') + ',color:' + token('--upd') + ',stroke-width:2px';
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: 'strict',
+        theme: 'base',
+        fontFamily: '"IBM Plex Sans", system-ui, sans-serif',
+        themeVariables: {
+          edgeLabelBackground: token('--surface'),
+          background: token('--bg'),
+          primaryColor: token('--accent-soft'),
+          primaryTextColor: token('--ink'),
+          primaryBorderColor: token('--accent'),
+          secondaryColor: token('--surface'),
+          tertiaryColor: token('--surface'),
+          lineColor: token('--muted'),
+          textColor: token('--ink'),
+          noteBkgColor: token('--upd-soft'),
+          noteTextColor: token('--upd'),
+          noteBorderColor: token('--upd'),
+          actorBkg: token('--accent-soft'),
+          actorBorder: token('--accent'),
+          actorTextColor: token('--ink'),
+          signalColor: token('--ink'),
+          signalTextColor: token('--ink'),
+          labelBoxBkgColor: token('--surface'),
+          labelTextColor: token('--ink'),
+          loopTextColor: token('--ink'),
+          fontSize: '14px'
+        }
+      });
+      const outs = document.querySelectorAll('.diagram .out');
+      for (let index = 0; index < outs.length; index++) {
+        const out = outs[index];
+        const source = document.getElementById(out.dataset.src).textContent
+          .replace(/UPDATED/g, updatedStyle);
+        try {
+          const result = await mermaid.render('uml-' + pass + '-' + index, source);
+          if (pass !== run) return;
+          out.innerHTML = result.svg;
+          // Keep the diagram's own size: a wide one scrolls sideways instead of shrinking.
+          const svg = out.querySelector('svg');
+          const box = svg && svg.viewBox && svg.viewBox.baseVal;
+          // Arrow labels go on top: Mermaid draws them before the boxes, so a box that
+          // overlaps a label would hide it.
+          if (svg) svg.querySelectorAll('g.edgeLabels').forEach((labels) => labels.parentNode.appendChild(labels));
+          if (box && box.width) {
+            // Shrink a wide diagram to fit, but never below 85% of its size (text stays
+            // readable): past that it scrolls sideways instead, starting at its middle.
+            const room = out.parentElement.clientWidth - 24;
+            const width = box.width <= room ? box.width : Math.max(room, box.width * 0.85);
+            svg.style.width = Math.round(width) + 'px';
+            svg.style.maxWidth = 'none';
+            svg.removeAttribute('width');
+            const frame = out.parentElement;
+            frame.scrollLeft = (frame.scrollWidth - frame.clientWidth) / 2;
+          }
+          if (svg) freeLabels(svg);
+        } catch (error) {
+          out.innerHTML = '<p class="err">Diagram failed to render: ' + String(error && error.message || error) + '</p>';
+        }
+      }
+    }
+
+    renderAll();
+    try {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', renderAll);
+      new MutationObserver(renderAll).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    } catch (error) { /* theme changes then keep the first render */ }
+  })();
+</script>
+<script src="code-popup.js"></script>

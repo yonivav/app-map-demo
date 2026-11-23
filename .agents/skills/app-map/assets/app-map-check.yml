@@ -1,0 +1,27 @@
+# Keeps the App map honest: fails a PR when a diagram stops rendering, and lists every name on
+# the map that no longer exists in the code. Copy to .github/workflows/app-map-check.yml and set
+# MAP_DIR. Uses the plugin's scripts from a pinned copy of the app-map repo.
+name: App map
+on:
+  pull_request:
+env:
+  MAP_DIR: docs/app-map
+  APP_MAP_REF: main
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/checkout@v4
+        with: { repository: yonivav/app-map, ref: '${{ env.APP_MAP_REF }}', path: .app-map }
+      # Dart's own parser for Flutter apps (tree-sitter is the fallback); harmless otherwise.
+      - uses: dart-lang/setup-dart@v1
+      - uses: browser-actions/setup-chrome@v1
+      - name: Build and verify the map
+        run: |
+          .app-map/skills/app-map/scripts/app-map build "$MAP_DIR"
+          .app-map/skills/app-map/scripts/app-map verify "$MAP_DIR"
+      - name: What changed since the map was synced
+        if: always()
+        run: .app-map/skills/app-map/scripts/app-map changes "$MAP_DIR" >> "$GITHUB_STEP_SUMMARY" || true
