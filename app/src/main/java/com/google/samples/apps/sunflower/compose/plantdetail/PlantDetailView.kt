@@ -134,7 +134,7 @@ fun PlantDetailsScreen(
                     PlantDetailsCallbacks(
                         onBackClick = onBackClick,
                         onFabClick = {
-                            plantDetailsViewModel.addPlantToGarden()
+                            plantDetailsViewModel.plantInGarden()
                         },
                         onShareClick = onShareClick,
                         onGalleryClick = onGalleryClick,

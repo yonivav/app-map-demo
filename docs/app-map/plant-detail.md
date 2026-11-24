@@ -22,7 +22,7 @@ classDiagram
     plantId
     plant · isPlanted
     showSnackbar
-    addPlantToGarden()
+    plantInGarden()
     dismissSnackbar()
     hasValidUnsplashKey()
   }
@@ -125,7 +125,7 @@ sequenceDiagram
   VM->>GRepo: isPlanted(plantId)
   GRepo-->>Screen: false → shows the + button
   User->>Screen: taps +
-  Screen->>VM: addPlantToGarden()
+  Screen->>VM: plantInGarden()
   VM->>GRepo: createGardenPlanting(plantId)
   GRepo->>Dao: insertGardenPlanting(gardenPlanting)
   Dao-->>Screen: isPlanted emits true, + disappears
